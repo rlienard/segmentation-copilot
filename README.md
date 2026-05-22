@@ -43,6 +43,21 @@ When `SCOPILOT_API__REQUIRE_AUTH=true` (prod default), set
 `SCOPILOT_API__API_KEYS=["<token>"]` and pass it via
 `Authorization: Bearer <token>` (or `SCOPILOT_API_TOKEN=<token>` for the CLI).
 
+### Run the WebEx bot (optional)
+
+```bash
+export SCOPILOT_WEBEX__BOT_ACCESS_TOKEN=<bot token>
+export SCOPILOT_WEBEX__WEBHOOK_SECRET=<hmac secret>
+export SCOPILOT_WEBEX__OPERATORS_ROOM_ID=<room id>
+uvicorn services.webex_bot.main:app --port 8001
+```
+
+Point your WebEx bot's webhook at `https://<bot host>/webhooks/webex`.
+With these env vars set, every proposal created via the API automatically
+posts an adaptive card to the operators' room; clicking Approve / Reject
+drives the proposal through the state machine and, on approval, updates
+the live matrix.
+
 ## Run the tests
 
 ```bash
@@ -93,19 +108,27 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
 - Schema includes `proposals`, `proposal_audit`, `matrix_versions`,
   `threat_lookups`, `audit_events` so Phases 3 and 5 can land additively.
 
-**Phase 2 (this PR)** adds:
+**Phase 3 (this PR)** adds:
 
-- `services/api/` — FastAPI service exposing the pipeline over REST
-  (runs, ingest, classify, matrix, sgt, proposals, healthz/readyz).
-  Bearer-token auth via `SCOPILOT_API__API_KEYS` (OIDC arrives in Phase 6).
-- `services/cli/` — `scopilot` Typer CLI talking to the API.
-- `app.py` — Streamlit rewritten as a pure HTTP client. A CI test
-  (`tests/test_no_core_in_app.py`) fails if `app.py` ever re-imports
-  agent internals.
+- `core/services/proposal.py` — full proposal state machine
+  (`pending → notified → {approved | rejected | expired}`,
+  `approved → applied | failed`) with **idempotency** (same shape returns
+  the existing row) and **storm collapse** (multiple proposals for the
+  same `(src_sgt, dst_sgt)` merge into one).
+- On approval, the service creates an immutable `matrix_version` whose
+  `parent_id` chains back to the previous baseline — rollback is a pointer
+  flip.
+- `core/services/notifier.py` — pluggable sink fan-out so future channels
+  (Slack, Teams, email) drop in without touching call sites.
+- `services/webex_bot/` — FastAPI service with HMAC-SHA1 webhook
+  verification, an adaptive-card builder, and a WebEx HTTP client. Drives
+  the approve/reject loop end-to-end and handles operator races gracefully.
+- API `POST /v1/proposals` now fans out to the notifier via
+  `BackgroundTasks`; `POST /v1/proposals/{id}/decision` goes through the
+  state machine.
 
 Subsequent phases (separate PRs):
 
-- **Phase 3** — Proposal state machine + WebEx bot + approval loop.
 - **Phase 4** — Scheduler worker + Redis Streams + cron-driven analysis.
 - **Phase 5** — Real-time threat daemon + pluggable threat-intel module.
 - **Phase 6** — MCP server + K8s manifests + observability + CI/CD.

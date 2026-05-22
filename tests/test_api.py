@@ -137,14 +137,16 @@ async def test_proposal_create_idempotent_and_decide(client: AsyncClient):
     assert second.status_code == 201
     assert second.json()["proposal"]["id"] == pid
 
-    # Approve.
+    # Approve. The new state machine transitions all the way through to
+    # APPLIED (apply-to-matrix step runs synchronously).
     decision = await client.post(
         f"/v1/proposals/{pid}/decision", json={"decision": "approved"}
     )
     assert decision.status_code == 200
-    assert decision.json()["proposal"]["status"] == "approved"
+    assert decision.json()["proposal"]["status"] == "applied"
 
-    # Second decision conflicts with optimistic lock.
+    # Second decision conflicts with optimistic lock — the proposal is no
+    # longer pending/notified, so decide() refuses.
     again = await client.post(
         f"/v1/proposals/{pid}/decision", json={"decision": "rejected"}
     )

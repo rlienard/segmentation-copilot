@@ -121,6 +121,86 @@ class ProposalRepository:
             ProposalAudit(proposal_id=proposal_id, event="notified", actor=None, payload=None)
         )
 
+    async def replace_aces(
+        self,
+        *,
+        proposal_id: str,
+        new_aces: list[Any],
+        appended_rationale: str | None = None,
+        actor: str | None = None,
+    ) -> ProposalRecord:
+        """Update an existing pending proposal's ACEs (storm-collapse path).
+
+        Idempotency key is intentionally NOT recalculated — collapsing must
+        not change the natural identity of the proposal that operators are
+        already looking at in WebEx.
+        """
+        proposal = await self.session.get(Proposal, proposal_id)
+        if proposal is None:
+            raise LookupError(f"proposal {proposal_id} not found")
+        if proposal.status not in (ProposalStatus.PENDING.value, ProposalStatus.NOTIFIED.value):
+            raise RuntimeError(
+                f"can only replace ACEs on pending/notified proposals (got {proposal.status})"
+            )
+        proposal.proposed_aces = new_aces
+        if appended_rationale:
+            proposal.rationale = (proposal.rationale + "\n\n" + appended_rationale).strip()
+        self.session.add(
+            ProposalAudit(
+                proposal_id=proposal_id,
+                event="collapsed",
+                actor=actor,
+                payload={"new_ace_count": len(new_aces)},
+            )
+        )
+        await self.session.flush()
+        return self._to_record(proposal)
+
+    async def mark_status(
+        self,
+        *,
+        proposal_id: str,
+        new_status: ProposalStatus,
+        audit_event: str,
+        actor: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> ProposalRecord:
+        """Unconditional status transition for downstream states (applied/failed/expired).
+
+        Use `decide()` for the optimistic-lock pending→approved/rejected hop.
+        """
+        proposal = await self.session.get(Proposal, proposal_id)
+        if proposal is None:
+            raise LookupError(f"proposal {proposal_id} not found")
+        proposal.status = new_status.value
+        self.session.add(
+            ProposalAudit(
+                proposal_id=proposal_id,
+                event=audit_event,
+                actor=actor,
+                payload=payload,
+            )
+        )
+        await self.session.flush()
+        return self._to_record(proposal)
+
+    async def expire_overdue(self, *, tenant_id: str, now: datetime | None = None) -> int:
+        """Bulk transition pending/notified proposals past their expires_at."""
+        now = now or datetime.utcnow()
+        stmt = select(Proposal).where(
+            Proposal.tenant_id == tenant_id,
+            Proposal.expires_at < now,
+            Proposal.status.in_([ProposalStatus.PENDING.value, ProposalStatus.NOTIFIED.value]),
+        )
+        rows = (await self.session.execute(stmt)).scalars().all()
+        for p in rows:
+            p.status = ProposalStatus.EXPIRED.value
+            self.session.add(
+                ProposalAudit(proposal_id=p.id, event="expired", actor=None, payload=None)
+            )
+        await self.session.flush()
+        return len(rows)
+
     async def decide(
         self,
         *,

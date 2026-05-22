@@ -22,8 +22,10 @@ def _reset_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SCOPILOT_ANTHROPIC__API_KEY", "test-key")
     monkeypatch.setenv("SCOPILOT_DEFAULT_TENANT_ID", "test-tenant")
     from segmentation_copilot import config
+    from segmentation_copilot.core.services import notifier as notifier_mod
 
     config.get_settings.cache_clear()
+    notifier_mod.reset_notifier()
 
 
 @pytest_asyncio.fixture
