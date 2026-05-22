@@ -43,6 +43,26 @@ When `SCOPILOT_API__REQUIRE_AUTH=true` (prod default), set
 `SCOPILOT_API__API_KEYS=["<token>"]` and pass it via
 `Authorization: Bearer <token>` (or `SCOPILOT_API_TOKEN=<token>` for the CLI).
 
+### Run the scheduler + worker (proactive autonomy)
+
+```bash
+# Required for production; for dev, set SCOPILOT_REDIS__URL=memory:// to
+# run everything single-process against the in-memory bus.
+export SCOPILOT_REDIS__URL=redis://localhost:6379/0
+
+# One process drives the cron + Redis leader election.
+python -m services.worker.main --role scheduler
+
+# One or more processes consume events.flow.unknown.
+python -m services.worker.main --role worker
+```
+
+When the scheduler detects a flow not covered by the latest approved
+matrix it publishes `events.flow.unknown`; the worker picks it up,
+classifies via Claude, and creates a rule proposal that lands in WebEx
+(or any other notifier sink). Operators approve/reject via the existing
+Phase-3 flow.
+
 ### Run the WebEx bot (optional)
 
 ```bash
@@ -108,7 +128,30 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
 - Schema includes `proposals`, `proposal_audit`, `matrix_versions`,
   `threat_lookups`, `audit_events` so Phases 3 and 5 can land additively.
 
-**Phase 3 (this PR)** adds:
+**Phase 4 (this PR)** adds:
+
+- `core/events/` — `EventBus` Protocol with two implementations:
+  Redis Streams for production (consumer groups, at-least-once, idempotency
+  dedup via `SET NX`) and an in-memory bus that's contract-equivalent
+  for tests / single-process dev. Picked automatically from
+  `SCOPILOT_REDIS__URL`.
+- `services/worker/` — proactive autonomy service:
+  - **Scheduler** (`--role scheduler`) — Redis-leader-elected; only the
+    elected replica fires the cron, so multiple instances are safe.
+    At every tick, loads new `flow_events` since the last cursor,
+    diffs against the latest approved `matrix_version`, and publishes
+    `events.flow.unknown` for every uncovered tuple.
+  - **Worker** (`--role worker`) — consumes `events.flow.unknown`,
+    classifies via Claude (honouring the 7-day classification cache so
+    re-seen flows don't pay LLM cost), and turns the verdict into a
+    rule proposal (deny for harmful / business_irrelevant; permit
+    otherwise). The existing storm-collapse logic keeps a misconfigured
+    syslog source from drowning operators.
+- Per-tenant scan cursor in Redis (28-day TTL); on Redis loss the worst
+  outcome is re-classifying the last few days — absorbed by the cache.
+- Bus idempotency keys make scan ticks safe to retry.
+
+**Phase 3** added:
 
 - `core/services/proposal.py` — full proposal state machine
   (`pending → notified → {approved | rejected | expired}`,
@@ -129,7 +172,6 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
 
 Subsequent phases (separate PRs):
 
-- **Phase 4** — Scheduler worker + Redis Streams + cron-driven analysis.
 - **Phase 5** — Real-time threat daemon + pluggable threat-intel module.
 - **Phase 6** — MCP server + K8s manifests + observability + CI/CD.
 

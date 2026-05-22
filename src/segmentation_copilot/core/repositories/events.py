@@ -12,7 +12,6 @@ from ...parser import FlowEvent as ParsedFlowEvent
 from ..models.domain import FlowEventRecord
 from ..models.orm import FlowEvent
 
-
 class FlowEventRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -63,3 +62,22 @@ class FlowEventRepository:
             ids.add(sgt)
             ids.add(dgt)
         return sorted(ids)
+
+    async def list_since(
+        self, *, tenant_id: str, since: datetime | None
+    ) -> list[FlowEventRecord]:
+        """Events ingested for this tenant on or after `since`.
+
+        Uses `ingestion_ts` (wall-clock), not the syslog `ts`, so the
+        scheduler is robust against year/TZ heuristics breaking at
+        rollover (the 24/7 case the parser warns about).
+        """
+        stmt = (
+            select(FlowEvent)
+            .where(FlowEvent.tenant_id == tenant_id)
+            .order_by(FlowEvent.ingestion_ts)
+        )
+        if since is not None:
+            stmt = stmt.where(FlowEvent.ingestion_ts >= since)
+        result = await self.session.execute(stmt)
+        return [FlowEventRecord.model_validate(e) for e in result.scalars().all()]
