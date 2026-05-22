@@ -139,6 +139,37 @@ class IngestionService:
         )
 
 
+    async def aggregated_for_run(self, run_id: int) -> list[aggregator.AggregatedFlow]:
+        """Reconstruct the aggregated flow list from persisted flow events.
+
+        Required because the API splits ingestion and classification across
+        separate HTTP calls — the AggregatedFlow objects from the first
+        call are gone by the time `/classify` runs.
+        """
+        records = await self.events.list_for_run(run_id)
+        events: list[parser.FlowEvent] = [
+            parser.FlowEvent(
+                ts=r.ts,
+                ingress_interface="",
+                sgacl_name=r.sgacl_name or "",
+                observed_action=r.observed_action or "",
+                protocol=r.protocol,
+                src_vrf="",
+                src_ip=r.src_ip or "",
+                src_port=r.src_port,
+                dst_vrf="",
+                dst_ip=r.dst_ip or "",
+                dst_port=r.dst_port,
+                sgt=r.sgt,
+                dgt=r.dgt,
+                hits=r.hits,
+                raw="",
+            )
+            for r in records
+        ]
+        return aggregator.aggregate(events)
+
+
 def _build_source(cfg: LogSourceConfig):
     if cfg.kind == "local":
         return LocalFileSource.from_config(cfg)

@@ -19,19 +19,29 @@ The matrix-wide default rule remains `deny-ip` — the agent emits only the expl
 pip install -e ".[dev]"
 ```
 
-## Run the Streamlit UI
+## Run the stack
+
+Phase 2 splits the app in two: a FastAPI service holds the agent + DB,
+and Streamlit / the CLI talk to it over HTTP.
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+# Start the API
+export SCOPILOT_ANTHROPIC__API_KEY=sk-ant-...
+export SCOPILOT_API__REQUIRE_AUTH=false           # dev only
+uvicorn services.api.main:app --reload
+
+# Streamlit UI (in another terminal)
 streamlit run app.py
+# or use the CLI
+scopilot --help
+scopilot health
+scopilot sgt set 100 Employees
+scopilot run start tests/fixtures/sample.log
 ```
 
-In the UI:
-- Pick a log source (upload a local file, point at a directory, or configure SSH).
-- Set the analysis window.
-- Upload the SGT dictionary (JSON `{ "100": "Employees" }` or CSV with `id,name`).
-- Click **Fetch and parse logs**, fill any missing SGT names in the *Missing SGTs* tab, then **Classify flows** and **Build matrix**.
-- Download the result as `.md` or `.csv`.
+When `SCOPILOT_API__REQUIRE_AUTH=true` (prod default), set
+`SCOPILOT_API__API_KEYS=["<token>"]` and pass it via
+`Authorization: Bearer <token>` (or `SCOPILOT_API_TOKEN=<token>` for the CLI).
 
 ## Run the tests
 
@@ -83,9 +93,18 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
 - Schema includes `proposals`, `proposal_audit`, `matrix_versions`,
   `threat_lookups`, `audit_events` so Phases 3 and 5 can land additively.
 
+**Phase 2 (this PR)** adds:
+
+- `services/api/` — FastAPI service exposing the pipeline over REST
+  (runs, ingest, classify, matrix, sgt, proposals, healthz/readyz).
+  Bearer-token auth via `SCOPILOT_API__API_KEYS` (OIDC arrives in Phase 6).
+- `services/cli/` — `scopilot` Typer CLI talking to the API.
+- `app.py` — Streamlit rewritten as a pure HTTP client. A CI test
+  (`tests/test_no_core_in_app.py`) fails if `app.py` ever re-imports
+  agent internals.
+
 Subsequent phases (separate PRs):
 
-- **Phase 2** — FastAPI service + Streamlit refactor + CLI client.
 - **Phase 3** — Proposal state machine + WebEx bot + approval loop.
 - **Phase 4** — Scheduler worker + Redis Streams + cron-driven analysis.
 - **Phase 5** — Real-time threat daemon + pluggable threat-intel module.

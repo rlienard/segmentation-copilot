@@ -1,112 +1,117 @@
-"""Segmentation Copilot — Streamlit UI.
+"""Segmentation Copilot — Streamlit UI (Phase 2: pure HTTP client of the API).
 
-Walks the operator through the workflow defined in the Security Analyst system
-prompt:
-  1. Configure log source (local file or SSH).
-  2. Choose the time window.
-  3. Upload (or paste) the SGT/DGT dictionary.
-  4. Fetch + parse + classify + build matrix.
-  5. Review the markdown matrix and download artefacts.
+Every action goes through the FastAPI service at `SCOPILOT_API_BASE`. No
+direct imports of `segmentation_copilot.tools`, `segmentation_copilot.core`,
+or the database — this file is now interchangeable with the CLI client
+and any other UI.
+
+The Phase-2 plan calls out a CI grep test
+(`tests/test_no_core_in_app.py`) that fails if any of those imports come
+back; do not bring them back without removing the test.
+
+Run with:
+
+    uvicorn services.api.main:app &     # in another terminal
+    streamlit run app.py
 """
 
 from __future__ import annotations
 
 import io
+import json
 import os
 from datetime import datetime, time, timedelta
-from pathlib import Path
+from typing import Any
 
+import httpx
 import streamlit as st
 
-from segmentation_copilot import db, sgt, tools
-from segmentation_copilot.sources import LogSourceConfig
+
+DEFAULT_API_BASE = os.environ.get("SCOPILOT_API_BASE", "http://localhost:8000")
 
 
-DB_PATH = Path("data/segmentation.db")
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-db.init_db(DB_PATH)
+# ---------------------------------------------------------------------------
+# Thin HTTP wrapper around the REST API
+# ---------------------------------------------------------------------------
 
 
-def _get_state() -> tools.AgentState:
-    if "agent_state" not in st.session_state:
-        st.session_state.agent_state = tools.AgentState(db_path=str(DB_PATH))
-    return st.session_state.agent_state
+class ApiError(RuntimeError):
+    pass
+
+
+def _client() -> httpx.Client:
+    base = st.session_state.get("api_base", DEFAULT_API_BASE)
+    token = st.session_state.get("api_token", "")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    return httpx.Client(base_url=base, headers=headers, timeout=120.0)
+
+
+def _call(method: str, path: str, **kwargs: Any) -> Any:
+    with _client() as c:
+        resp = c.request(method, path, **kwargs)
+    if not resp.is_success:
+        raise ApiError(f"HTTP {resp.status_code}: {resp.text}")
+    if resp.headers.get("content-type", "").startswith("application/json"):
+        return resp.json()
+    return resp.text
+
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:
     st.set_page_config(page_title="Segmentation Copilot", layout="wide")
     st.title("Segmentation Copilot")
     st.caption(
-        "An AI Security Analyst that turns Cisco SG-ACL hit logs into a "
-        "TrustSec contract matrix proposal."
+        "AI Security Analyst that turns Cisco SG-ACL hit logs into a "
+        "TrustSec contract matrix proposal. Backed by the segmentation-copilot API."
     )
 
-    state = _get_state()
-    _sidebar(state)
-
-    tab_run, tab_inputs, tab_matrix, tab_history = st.tabs(
-        ["Run analysis", "Missing SGTs", "Matrix", "History"]
+    _sidebar()
+    tab_run, tab_inputs, tab_matrix, tab_history, tab_proposals = st.tabs(
+        ["Run analysis", "Missing SGTs", "Matrix", "History", "Proposals"]
     )
-
     with tab_run:
-        _run_panel(state)
+        _run_panel()
     with tab_inputs:
-        _missing_sgts_panel(state)
+        _missing_sgts_panel()
     with tab_matrix:
-        _matrix_panel(state)
+        _matrix_panel()
     with tab_history:
         _history_panel()
+    with tab_proposals:
+        _proposals_panel()
 
 
-def _sidebar(state: tools.AgentState) -> None:
+def _sidebar() -> None:
     with st.sidebar:
-        st.header("Configuration")
-
-        api_key = st.text_input(
-            "Anthropic API key",
-            value=os.environ.get("ANTHROPIC_API_KEY", ""),
+        st.header("API")
+        st.session_state.setdefault("api_base", DEFAULT_API_BASE)
+        st.session_state.setdefault("api_token", "")
+        st.session_state["api_base"] = st.text_input(
+            "API base URL", value=st.session_state["api_base"]
+        )
+        st.session_state["api_token"] = st.text_input(
+            "API bearer token (optional)",
+            value=st.session_state["api_token"],
             type="password",
         )
-        if api_key:
-            state.api_key = api_key
+        if st.button("Test connection"):
+            try:
+                _call("GET", "/readyz")
+                st.success("API reachable")
+            except ApiError as exc:
+                st.error(str(exc))
 
-        st.subheader("Log source")
-        kind = st.radio("Source type", ["local", "ssh"], horizontal=True)
+        st.divider()
+        st.header("New run")
+        uploaded = st.file_uploader(
+            "Upload a syslog file", type=["log", "txt"], accept_multiple_files=False
+        )
 
-        if kind == "local":
-            uploaded = st.file_uploader(
-                "Upload syslog file (or .log)", type=["log", "txt"], accept_multiple_files=False
-            )
-            path_text = st.text_input("…or absolute path to a file/directory on the server")
-            if st.button("Use local source"):
-                if uploaded is not None:
-                    target = Path("data/uploads") / uploaded.name
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(uploaded.getvalue())
-                    state.source_config = LogSourceConfig(kind="local", options={"path": str(target)})
-                    st.success(f"Using uploaded file: {target}")
-                elif path_text:
-                    state.source_config = LogSourceConfig(kind="local", options={"path": path_text})
-                    st.success(f"Using path: {path_text}")
-                else:
-                    st.error("Provide either an upload or a path.")
-        else:
-            host = st.text_input("Host", placeholder="syslog.example.com")
-            username = st.text_input("Username")
-            password = st.text_input("Password (optional)", type="password")
-            key_filename = st.text_input("SSH key path (optional)")
-            log_path = st.text_input("Remote log path", value="/var/log/network/*.log")
-            if st.button("Use SSH source"):
-                state.source_config = LogSourceConfig(
-                    kind="ssh",
-                    options={
-                        "host": host, "username": username, "password": password or None,
-                        "key_filename": key_filename or None, "log_path": log_path,
-                    },
-                )
-                st.success(f"Configured SSH source to {host}")
-
-        st.subheader("Analysis window")
+        st.subheader("Analysis window (metadata)")
         default_end = datetime.utcnow()
         default_start = default_end - timedelta(days=1)
         col1, col2 = st.columns(2)
@@ -116,86 +121,118 @@ def _sidebar(state: tools.AgentState) -> None:
         with col2:
             end_date = st.date_input("End date", value=default_end.date())
             end_time = st.time_input("End time", value=time(23, 59))
-        if st.button("Set window"):
-            state.window_start = datetime.combine(start_date, start_time)
-            state.window_end = datetime.combine(end_date, end_time)
-            st.success(f"Window: {state.window_start} → {state.window_end}")
 
-        st.subheader("SGT dictionary")
-        dict_file = st.file_uploader("Upload SGT dict (JSON or CSV)", type=["json", "csv"])
+        if st.button("Create run and ingest", type="primary", disabled=uploaded is None):
+            try:
+                run_resp = _call(
+                    "POST", "/v1/runs",
+                    json={
+                        "source_type": "upload",
+                        "window_start": datetime.combine(start_date, start_time).isoformat(),
+                        "window_end": datetime.combine(end_date, end_time).isoformat(),
+                    },
+                )
+                run_id = run_resp["run"]["id"]
+                lines = uploaded.getvalue().decode("utf-8", errors="replace").splitlines()
+                summary = _call(
+                    "POST", f"/v1/runs/{run_id}/ingest", json={"lines": lines}
+                )
+                st.session_state["active_run_id"] = run_id
+                st.session_state["ingest_summary"] = summary
+                st.success(f"Run {run_id} created and ingested.")
+            except ApiError as exc:
+                st.error(str(exc))
+
+        st.divider()
+        st.header("SGT dictionary")
+        dict_file = st.file_uploader("Upload SGT dict (JSON)", type=["json"])
         if dict_file is not None and st.button("Load dictionary"):
-            text = dict_file.getvalue().decode("utf-8")
-            if dict_file.name.lower().endswith(".json"):
-                state.sgt_dict = sgt.load_from_json(text)
-            else:
-                state.sgt_dict = sgt.load_from_csv(text)
-            st.success(f"Loaded {len(state.sgt_dict.names)} SGT entries.")
+            try:
+                data = json.loads(dict_file.getvalue().decode("utf-8"))
+                _call("POST", "/v1/sgt/bulk",
+                      json={"entries": {str(k): str(v) for k, v in data.items()}})
+                st.success(f"Loaded {len(data)} entries.")
+            except ApiError as exc:
+                st.error(str(exc))
 
 
-def _run_panel(state: tools.AgentState) -> None:
-    st.markdown(
-        "### Run pipeline\n"
-        "Once the sidebar has a source, window, and SGT dictionary, run the steps "
-        "below. The agent will surface SGT names it can't resolve in the **Missing "
-        "SGTs** tab."
-    )
+def _active_run_id() -> int | None:
+    return st.session_state.get("active_run_id")
 
-    ready = all([state.source_config, state.window_start, state.window_end])
-    if not ready:
-        st.info("Configure source and time window in the sidebar first.")
+
+def _run_panel() -> None:
+    run_id = _active_run_id()
+    if run_id is None:
+        st.info("Upload a log file in the sidebar to start a run.")
         return
 
-    if st.button("1. Fetch and parse logs", type="primary"):
-        with st.spinner("Fetching and parsing…"):
-            summary = tools.fetch_and_parse_logs(state)
-        st.session_state.parse_summary = summary
-    if "parse_summary" in st.session_state:
-        st.json(st.session_state.parse_summary)
+    summary = st.session_state.get("ingest_summary")
+    if summary:
+        st.subheader("Ingest summary")
+        st.json(summary)
 
-    if state.events and st.button("2. Classify flows", disabled=state.sgt_dict is None):
-        with st.spinner("Asking Claude to classify flows…"):
-            counts = tools.classify_flows(state)
-        st.session_state.classify_counts = counts
+    if st.button("Classify flows", type="primary"):
+        try:
+            result = _call("POST", f"/v1/runs/{run_id}/classify")
+            st.session_state["classify_counts"] = result["counts"]
+            st.success("Classification complete.")
+        except ApiError as exc:
+            st.error(str(exc))
+
     if "classify_counts" in st.session_state:
-        st.write("**Classification counts**")
-        st.json(st.session_state.classify_counts)
+        st.subheader("Classification counts")
+        st.json(st.session_state["classify_counts"])
 
-    if state.classified and st.button("3. Build matrix"):
-        with st.spinner("Building contracts…"):
-            tools.build_matrix(state)
-        st.success("Matrix ready — see the **Matrix** tab.")
+    if st.button("Build matrix"):
+        try:
+            matrix = _call("POST", f"/v1/runs/{run_id}/matrix")
+            st.session_state["matrix"] = matrix
+            st.success("Matrix built — see the Matrix tab.")
+        except ApiError as exc:
+            st.error(str(exc))
 
 
-def _missing_sgts_panel(state: tools.AgentState) -> None:
-    missing = tools.list_missing_sgt_names(state) if state.events else []
+def _missing_sgts_panel() -> None:
+    run_id = _active_run_id()
+    if run_id is None:
+        st.info("No active run.")
+        return
+    try:
+        data = _call("GET", f"/v1/runs/{run_id}/missing-sgts")
+    except ApiError as exc:
+        st.error(str(exc))
+        return
+    missing = data["missing"]
     if not missing:
         st.success("No missing SGTs.")
         return
-    st.warning(
-        f"{len(missing)} SGT/DGT IDs were observed in logs but are not in the "
-        "dictionary. Provide names below before classifying."
-    )
+    st.warning(f"{len(missing)} SGT/DGT IDs are missing from the dictionary.")
     for sgt_id in missing:
         name = st.text_input(f"Name for SGT {sgt_id}", key=f"sgt_name_{sgt_id}")
         if name and st.button(f"Register SGT {sgt_id}", key=f"sgt_btn_{sgt_id}"):
-            tools.register_sgt_name(state, sgt_id, name)
-            st.experimental_rerun()
+            try:
+                _call("POST", "/v1/sgt", json={"sgt_id": sgt_id, "name": name})
+                st.success(f"Registered {sgt_id} → {name}")
+            except ApiError as exc:
+                st.error(str(exc))
 
 
-def _matrix_panel(state: tools.AgentState) -> None:
-    if not state.matrix_markdown:
-        st.info("Run the pipeline to generate a matrix.")
+def _matrix_panel() -> None:
+    matrix = st.session_state.get("matrix")
+    if not matrix:
+        st.info("Build the matrix from the Run tab.")
         return
-    st.markdown(state.matrix_markdown)
+    st.markdown(matrix["markdown"])
     st.download_button(
         "Download matrix (.md)",
-        data=state.matrix_markdown.encode("utf-8"),
+        data=matrix["markdown"].encode("utf-8"),
         file_name="trustsec_matrix.md",
         mime="text/markdown",
     )
     csv_buf = io.StringIO()
-    csv_buf.write("Source SGT,Destination SGT,Contract Name,Protocol,Source Port,Destination Port,Action\n")
-    for c in state.contracts:
+    csv_buf.write("Source SGT,Destination SGT,Contract Name,Protocol,"
+                  "Source Port,Destination Port,Action\n")
+    for c in matrix["contracts"]:
         for ace in c["aces"]:
             csv_buf.write(
                 f"{c['src_sgt_name']},{c['dst_sgt_name']},{c['name']},"
@@ -210,17 +247,49 @@ def _matrix_panel(state: tools.AgentState) -> None:
 
 
 def _history_panel() -> None:
-    runs = db.list_runs(DB_PATH)
+    try:
+        runs = _call("GET", "/v1/runs")["runs"]
+    except ApiError as exc:
+        st.error(str(exc))
+        return
     if not runs:
         st.info("No prior runs.")
         return
     st.dataframe(runs, use_container_width=True)
-    run_ids = [r["id"] for r in runs]
-    selected = st.selectbox("Inspect run", run_ids)
-    if selected:
-        contracts = db.load_contracts(DB_PATH, selected)
-        st.write(f"**{len(contracts)} contracts**")
-        st.json(contracts)
+
+
+def _proposals_panel() -> None:
+    try:
+        data = _call("GET", "/v1/proposals")
+    except ApiError as exc:
+        st.error(str(exc))
+        return
+    proposals = data["proposals"]
+    if not proposals:
+        st.info("No proposals.")
+        return
+    for p in proposals:
+        with st.expander(
+            f"[{p['status']}] {p['src_sgt']} → {p['dst_sgt']} — {p['trigger']}"
+        ):
+            st.markdown(f"**Rationale:** {p['rationale']}")
+            st.json(p["proposed_aces"])
+            if p["status"] in ("pending", "notified"):
+                col_a, col_r = st.columns(2)
+                if col_a.button("Approve", key=f"approve_{p['id']}"):
+                    try:
+                        _call("POST", f"/v1/proposals/{p['id']}/decision",
+                              json={"decision": "approved"})
+                        st.success("Approved.")
+                    except ApiError as exc:
+                        st.error(str(exc))
+                if col_r.button("Reject", key=f"reject_{p['id']}"):
+                    try:
+                        _call("POST", f"/v1/proposals/{p['id']}/decision",
+                              json={"decision": "rejected"})
+                        st.success("Rejected.")
+                    except ApiError as exc:
+                        st.error(str(exc))
 
 
 if __name__ == "__main__":

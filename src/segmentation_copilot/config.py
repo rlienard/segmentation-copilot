@@ -84,6 +84,25 @@ class WebExSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SCOPILOT_WEBEX__", extra="ignore")
 
 
+class ApiSettings(BaseSettings):
+    """FastAPI service configuration.
+
+    Auth is intentionally simple in Phase 2: a static set of bearer tokens
+    read from `api_keys`. OIDC verification lands in Phase 6 hardening —
+    when it does, the `require_auth` toggle stays, but tokens are validated
+    against a JWKS instead of a static list.
+    """
+
+    host: str = "0.0.0.0"
+    port: int = 8000
+    base_url: str = "http://localhost:8000"
+    require_auth: bool = True
+    api_keys: list[str] = Field(default_factory=list)
+    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+
+    model_config = SettingsConfigDict(env_prefix="SCOPILOT_API__", extra="ignore")
+
+
 class Settings(BaseSettings):
     """Root settings object. Use `get_settings()` to obtain a cached instance."""
 
@@ -98,6 +117,7 @@ class Settings(BaseSettings):
     threat: ThreatIntelSettings = Field(default_factory=ThreatIntelSettings)
     scheduler: SchedulerSettings = Field(default_factory=SchedulerSettings)
     webex: WebExSettings = Field(default_factory=WebExSettings)
+    api: ApiSettings = Field(default_factory=ApiSettings)
 
     model_config = SettingsConfigDict(
         env_prefix="SCOPILOT_",
