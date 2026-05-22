@@ -16,5 +16,14 @@ from .baseline import BaselineService
 from .classification import ClassificationService
 from .ingestion import IngestionService
 from .matrix import MatrixService
+from .proposal import ProposalApplyError, ProposalConflictError, ProposalService
 
-__all__ = ["BaselineService", "ClassificationService", "IngestionService", "MatrixService"]
+__all__ = [
+    "BaselineService",
+    "ClassificationService",
+    "IngestionService",
+    "MatrixService",
+    "ProposalApplyError",
+    "ProposalConflictError",
+    "ProposalService",
+]
