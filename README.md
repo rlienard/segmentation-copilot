@@ -63,6 +63,24 @@ classifies via Claude, and creates a rule proposal that lands in WebEx
 (or any other notifier sink). Operators approve/reject via the existing
 Phase-3 flow.
 
+### Run the threat daemon (reactive autonomy, optional)
+
+Tails the syslog stream in real time and on a malicious destination IP
+publishes `events.flow.unknown` with `trigger="threat"` — the same
+worker pipeline classifies the flow and posts a proposal. Requires at
+least one threat-intel provider configured.
+
+```bash
+export SCOPILOT_THREAT__ABUSEIPDB_API_KEY=<key>
+# optional: SCOPILOT_THREAT__OTX_API_KEY, SCOPILOT_THREAT__VIRUSTOTAL_API_KEY
+
+python -m services.threat_daemon.main \
+    --host syslog.example.com \
+    --username collector \
+    --key-filename /run/secrets/ssh_key \
+    --log-path /var/log/network/syslog
+```
+
 ### Run the WebEx bot (optional)
 
 ```bash
@@ -128,7 +146,32 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
 - Schema includes `proposals`, `proposal_audit`, `matrix_versions`,
   `threat_lookups`, `audit_events` so Phases 3 and 5 can land additively.
 
-**Phase 4 (this PR)** adds:
+**Phase 5 (this PR)** adds:
+
+- `core/threat/` — pluggable threat-intelligence layer with a
+  `ThreatIntelClient` Protocol and four implementations:
+  - **AbuseIPDB** (primary; free tier 1000/day)
+  - **AlienVault OTX** (pulse-count scoring)
+  - **VirusTotal** (engine-stats normalisation)
+  - **Talos** (opt-in best-effort; documented as brittle, never the
+    only signal)
+- `ThreatAggregator` runs them in parallel with a per-call timeout and
+  applies the decision policy (score ≥ threshold OR two-provider
+  category consensus). Per-provider failures don't poison the decision.
+- Redis caching (6h clean / 24h malicious / 1h 404) backed by a
+  `threat_lookups` audit table.
+- `core/sources/streaming.py` — `StreamingLogSource` Protocol +
+  `InMemoryStreamingSource` for tests/dev.
+- `core/sources/streaming_ssh.py` — production `asyncssh`-based tail
+  with `tail -F`, exponential-backoff reconnect, heartbeat markers, and
+  resilience against log rotation.
+- `services/threat_daemon/` — ties everything together: tail → parse →
+  IP lookup → on malicious verdict, publish `events.flow.unknown` with
+  `trigger="threat"` and the full verdict trail attached. Reuses the
+  Phase-4 worker pipeline downstream — same classification, same
+  proposal flow, same WebEx approval.
+
+**Phase 4** added:
 
 - `core/events/` — `EventBus` Protocol with two implementations:
   Redis Streams for production (consumer groups, at-least-once, idempotency
@@ -172,7 +215,6 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
 
 Subsequent phases (separate PRs):
 
-- **Phase 5** — Real-time threat daemon + pluggable threat-intel module.
 - **Phase 6** — MCP server + K8s manifests + observability + CI/CD.
 
 ## Apply migrations
