@@ -80,12 +80,16 @@ dev = [
     "httpx>=0.27.0",
 ]
 
+[project.scripts]
+scopilot = "services.cli.main:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["segmentation_copilot*", "services*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
