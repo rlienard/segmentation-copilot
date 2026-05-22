@@ -1,0 +1,31 @@
+[project]
+name = "segmentation-copilot"
+version = "0.1.0"
+description = "AI agent that analyzes Cisco SD-Access SG-ACL logs and proposes TrustSec matrix contracts."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40.0",
+    "claude-agent-sdk>=0.1.0",
+    "streamlit>=1.36.0",
+    "paramiko>=3.4.0",
+    "pydantic>=2.7.0",
+    "python-dateutil>=2.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
