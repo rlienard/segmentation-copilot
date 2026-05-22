@@ -42,16 +42,23 @@ pytest
 ## Project layout
 
 ```
-app.py                          # Streamlit entry point
+app.py                          # Streamlit entry point (legacy; refactored to API client in Phase 2)
+alembic/                        # async SQLAlchemy migrations
 src/segmentation_copilot/
+    config.py                   # Pydantic Settings — SCOPILOT_* env vars
     parser.py                   # %RBM-6-SGACLHIT regex parser
     aggregator.py               # Group events into unique flow tuples
     sgt.py                      # SGT dict load + lookup with missing-name registry
     classify.py                 # Claude-based flow categorisation
     contracts.py                # Build contracts + render markdown matrix
-    db.py                       # SQLite persistence
+    db.py                       # legacy sync SQLite; replaced by core/ in Phase 1
     agent.py                    # Security Analyst system prompt + tool registry
-    tools.py                    # Pure-Python tool implementations
+    tools.py                    # legacy AgentState pipeline; replaced by core/services in Phase 1
+    core/
+        db.py                   # async SQLAlchemy 2.0 engine + session factory
+        models/                 # ORM (orm.py) + Pydantic domain models (domain.py)
+        repositories/           # async repos: runs, events, classifications, contracts, sgt, proposals, matrix
+        services/               # orchestration: ingestion, classification, matrix, baseline
     sources/
         base.py                 # LogSource abstract base
         local.py                # Local file backend
@@ -59,3 +66,35 @@ src/segmentation_copilot/
 tests/                          # pytest suite + fixtures
 data/                           # SQLite db + uploads (gitignored)
 ```
+
+## Production-readiness roadmap
+
+The plan in `/root/.claude/plans/i-would-like-to-sparkling-owl.md` decomposes the
+project into six phases. **Phase 1 (this PR)** lands the foundation:
+
+- Centralized Pydantic `Settings` (`config.py`) consuming `SCOPILOT_*` env vars.
+- Async SQLAlchemy 2.0 + Alembic — supports SQLite (dev) and Postgres (prod).
+- ORM and Pydantic domain models with `tenant_id` on every tenant-scoped table.
+- Repository layer (`core/repositories/`) with idempotent upserts and the
+  optimistic-lock proposal `decide()` SQL.
+- Service layer (`core/services/`) wrapping the existing pure-function pipeline
+  (`parser`, `aggregator`, `classify`, `contracts`) with persistence and a
+  recent-flow classification cache.
+- Schema includes `proposals`, `proposal_audit`, `matrix_versions`,
+  `threat_lookups`, `audit_events` so Phases 3 and 5 can land additively.
+
+Subsequent phases (separate PRs):
+
+- **Phase 2** — FastAPI service + Streamlit refactor + CLI client.
+- **Phase 3** — Proposal state machine + WebEx bot + approval loop.
+- **Phase 4** — Scheduler worker + Redis Streams + cron-driven analysis.
+- **Phase 5** — Real-time threat daemon + pluggable threat-intel module.
+- **Phase 6** — MCP server + K8s manifests + observability + CI/CD.
+
+## Apply migrations
+
+```bash
+alembic upgrade head
+```
+
+Override the database URL via `SCOPILOT_DB__URL` (see `.env.example`).

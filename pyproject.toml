@@ -1,22 +1,83 @@
 [project]
 name = "segmentation-copilot"
-version = "0.1.0"
+version = "0.2.0"
 description = "AI agent that analyzes Cisco SD-Access SG-ACL logs and proposes TrustSec matrix contracts."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.40.0",
     "claude-agent-sdk>=0.1.0",
-    "streamlit>=1.36.0",
-    "paramiko>=3.4.0",
     "pydantic>=2.7.0",
+    "pydantic-settings>=2.4.0",
     "python-dateutil>=2.9.0",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13.0",
+    "aiosqlite>=0.20.0",
 ]
 
 [project.optional-dependencies]
+# Postgres driver (prod). Dev uses aiosqlite from base deps.
+postgres = [
+    "asyncpg>=0.29.0",
+    "psycopg2-binary>=2.9.9",  # required by Alembic for sync migrations
+]
+# Streamlit UI (Phase 2: refactored to HTTP-client of api/)
+ui = [
+    "streamlit>=1.36.0",
+    "httpx>=0.27.0",
+]
+# Source connectors
+sources = [
+    "paramiko>=3.4.0",   # legacy windowed SSH fetch
+    "asyncssh>=2.14.0",  # Phase 5: streaming tail
+]
+# FastAPI service (Phase 2)
+api = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "sse-starlette>=2.0.0",
+    "python-jose[cryptography]>=3.3.0",
+    "authlib>=1.3.0",
+]
+# Worker / scheduler / threat-daemon (Phase 4/5)
+worker = [
+    "redis>=5.0.0",
+    "apscheduler>=3.10.0",
+    "httpx>=0.27.0",
+    "tenacity>=8.2.0",
+]
+# WebEx bot (Phase 3)
+webex = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "httpx>=0.27.0",
+]
+# MCP server (Phase 6)
+mcp = [
+    "mcp>=1.0.0",
+]
+# CLI client (Phase 2)
+cli = [
+    "typer>=0.12.0",
+    "rich>=13.7.0",
+    "httpx>=0.27.0",
+]
+# Observability
+otel = [
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-exporter-otlp>=1.25.0",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
+    "prometheus-client>=0.20.0",
+]
+# Dev / test
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "httpx>=0.27.0",
 ]
 
 [build-system]
@@ -29,3 +90,16 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict_optional = true
+warn_unused_ignores = true
