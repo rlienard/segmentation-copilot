@@ -146,7 +146,31 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
 - Schema includes `proposals`, `proposal_audit`, `matrix_versions`,
   `threat_lookups`, `audit_events` so Phases 3 and 5 can land additively.
 
-**Phase 5 (this PR)** adds:
+**Phase 6 (this PR)** adds:
+
+- `services/mcp_server/` — MCP server exposing 14 tools (runs, SGT,
+  proposals, threat intel). Two transports on one shared registry:
+  stdio (`python -m services.mcp_server.stdio`) for Claude Code /
+  Desktop, and streamable HTTP for LibreChat / remote clients.
+  `set_sgt_name` is gated by `--allow-dictionary-edit`.
+- `deploy/Dockerfile` — multi-stage; one image serves every role
+  (api / worker / scheduler / mcp / threat-daemon / webex-bot / ui).
+  Non-root, read-only-rootfs friendly.
+- `deploy/docker-compose.yml` — full stack (postgres + redis + every
+  service) behind Compose profiles for the optional ones (webex,
+  threat, ui).
+- `deploy/k8s/base/` — kustomize base with Deployments + Services +
+  HPAs + PodDisruptionBudget for the scheduler + Ingress + an example
+  NetworkPolicy stack. Migration runs as a pre-install Job /
+  argocd-sync-wave -10.
+- `core/observability/` — JSON structured logs + Prometheus metrics
+  (counters for flow_unknown / classifications / proposals /
+  threat_lookups). API exposes `/metrics`.
+- `.github/workflows/ci.yml` — ruff lint, Alembic migration on a real
+  Postgres service container, `pytest` against the full matrix,
+  Docker build + push to GHCR on `main`, Trivy scan.
+
+**Phase 5** added:
 
 - `core/threat/` — pluggable threat-intelligence layer with a
   `ThreatIntelClient` Protocol and four implementations:
@@ -213,9 +237,20 @@ project into six phases. **Phase 1 (this PR)** lands the foundation:
   `BackgroundTasks`; `POST /v1/proposals/{id}/decision` goes through the
   state machine.
 
-Subsequent phases (separate PRs):
+## Deploy
 
-- **Phase 6** — MCP server + K8s manifests + observability + CI/CD.
+```bash
+# Local: full stack on docker-compose
+docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml --profile ui --profile webex up -d
+
+# Kubernetes
+kubectl apply -k deploy/k8s/base
+```
+
+Both targets need at least `SCOPILOT_ANTHROPIC__API_KEY`; threat-intel
+and WebEx-bot keys are optional. In production, source secrets via
+External Secrets Operator rather than the example `Secret`.
 
 ## Apply migrations
 

@@ -21,7 +21,6 @@ import httpx
 
 from .base import ThreatVerdict
 
-
 _URL = "https://talosintelligence.com/sb_api/query_lookup"
 
 

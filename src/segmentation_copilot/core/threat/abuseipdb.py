@@ -18,7 +18,6 @@ import httpx
 
 from .base import ThreatVerdict
 
-
 _BASE_URL = "https://api.abuseipdb.com/api/v2"
 
 # Category code → label mapping (top-level signals only; full list at
@@ -29,7 +28,7 @@ _CATEGORY_CODES: dict[int, str] = {
     9: "open_proxy",
     10: "web_spam",
     11: "email_spam",
-    14: "port_scan",
+    14: "scanner",
     15: "hacking",
     18: "brute_force",
     19: "bad_web_bot",
@@ -37,7 +36,6 @@ _CATEGORY_CODES: dict[int, str] = {
     21: "web_app_attack",
     22: "ssh",
     23: "iot_targeted",
-    14: "scanner",
 }
 
 

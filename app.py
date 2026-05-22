@@ -26,7 +26,6 @@ from typing import Any
 import httpx
 import streamlit as st
 
-
 DEFAULT_API_BASE = os.environ.get("SCOPILOT_API_BASE", "http://localhost:8000")
 
 

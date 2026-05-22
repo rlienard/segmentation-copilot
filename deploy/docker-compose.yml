@@ -1,0 +1,185 @@
+# Segmentation Copilot — full stack.
+#
+# Brings up postgres + redis + every service we ship, behind a single
+# `docker compose up`. For production deployments, prefer the K8s
+# manifests under deploy/k8s/ — this compose file is optimised for
+# local development and demo environments.
+#
+# Optional services live behind Compose profiles:
+#   --profile webex    bring up the WebEx bot (requires bot token)
+#   --profile threat   bring up the threat daemon (requires SSH creds
+#                                                  and a threat-intel key)
+#   --profile ui       bring up the Streamlit UI
+#
+# Usage:
+#   docker compose -f deploy/docker-compose.yml up -d
+#   docker compose -f deploy/docker-compose.yml --profile webex --profile ui up -d
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: scopilot
+      POSTGRES_USER: scopilot
+      POSTGRES_PASSWORD: scopilot
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scopilot -d scopilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_DB__URL: postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot
+      SCOPILOT_DB__SYNC_URL: postgresql+psycopg2://scopilot:scopilot@postgres:5432/scopilot
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_DB__URL: postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot
+      SCOPILOT_REDIS__URL: redis://redis:6379/0
+      SCOPILOT_API__REQUIRE_AUTH: "false"
+      SCOPILOT_LOG_FORMAT: json
+      SCOPILOT_ANTHROPIC__API_KEY: ${SCOPILOT_ANTHROPIC__API_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_DB__URL: postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot
+      SCOPILOT_REDIS__URL: redis://redis:6379/0
+      SCOPILOT_LOG_FORMAT: json
+      SCOPILOT_ANTHROPIC__API_KEY: ${SCOPILOT_ANTHROPIC__API_KEY:-}
+    command: ["python", "-m", "services.worker.main", "--role", "worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_DB__URL: postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot
+      SCOPILOT_REDIS__URL: redis://redis:6379/0
+      SCOPILOT_LOG_FORMAT: json
+    command: ["python", "-m", "services.worker.main", "--role", "scheduler"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  mcp-http:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_DB__URL: postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot
+      SCOPILOT_REDIS__URL: redis://redis:6379/0
+      SCOPILOT_LOG_FORMAT: json
+      SCOPILOT_ANTHROPIC__API_KEY: ${SCOPILOT_ANTHROPIC__API_KEY:-}
+    command: ["python", "-m", "services.mcp_server.http", "--port", "8002"]
+    ports:
+      - "8002:8002"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  webex-bot:
+    profiles: ["webex"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_DB__URL: postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot
+      SCOPILOT_REDIS__URL: redis://redis:6379/0
+      SCOPILOT_LOG_FORMAT: json
+      SCOPILOT_WEBEX__BOT_ACCESS_TOKEN: ${SCOPILOT_WEBEX__BOT_ACCESS_TOKEN:-}
+      SCOPILOT_WEBEX__WEBHOOK_SECRET: ${SCOPILOT_WEBEX__WEBHOOK_SECRET:-}
+      SCOPILOT_WEBEX__OPERATORS_ROOM_ID: ${SCOPILOT_WEBEX__OPERATORS_ROOM_ID:-}
+    command: ["uvicorn", "services.webex_bot.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8001:8001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  threat-daemon:
+    profiles: ["threat"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_DB__URL: postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot
+      SCOPILOT_REDIS__URL: redis://redis:6379/0
+      SCOPILOT_LOG_FORMAT: json
+      SCOPILOT_THREAT__ABUSEIPDB_API_KEY: ${SCOPILOT_THREAT__ABUSEIPDB_API_KEY:-}
+      SCOPILOT_THREAT__OTX_API_KEY: ${SCOPILOT_THREAT__OTX_API_KEY:-}
+      SCOPILOT_THREAT__VIRUSTOTAL_API_KEY: ${SCOPILOT_THREAT__VIRUSTOTAL_API_KEY:-}
+      SSH_HOST: ${SCOPILOT_THREAT_SSH_HOST:-}
+      SSH_USER: ${SCOPILOT_THREAT_SSH_USER:-}
+      SSH_LOG_PATH: ${SCOPILOT_THREAT_SSH_LOG_PATH:-/var/log/network/syslog}
+    command: ["sh", "-c", "python -m services.threat_daemon.main --host $$SSH_HOST --username $$SSH_USER --log-path $$SSH_LOG_PATH"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  ui:
+    profiles: ["ui"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SCOPILOT_API_BASE: http://api:8000
+    command: ["streamlit", "run", "/app/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator
 
 from ..parser import _parse_ts  # type: ignore[attr-defined]
 from .base import LogSource, LogSourceConfig
@@ -15,7 +15,7 @@ class LocalFileSource(LogSource):
         self.paths = paths
 
     @classmethod
-    def from_config(cls, config: LogSourceConfig) -> "LocalFileSource":
+    def from_config(cls, config: LogSourceConfig) -> LocalFileSource:
         raw = config.options.get("path")
         if not raw:
             raise ValueError("LocalFileSource requires 'path' in options")

@@ -19,11 +19,9 @@ from segmentation_copilot.core import db as core_db
 from segmentation_copilot.core.events import InMemoryBus
 from segmentation_copilot.core.repositories.sgt import SGTRepository
 from segmentation_copilot.core.services.ingestion import IngestionService
-
 from services.worker.cursor import MemoryCursorStore
 from services.worker.leader import MemoryLeader
 from services.worker.scheduler import run_scheduler
-
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample.log"
 TENANT = "test-tenant"

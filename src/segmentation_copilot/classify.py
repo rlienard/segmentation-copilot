@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Iterable
 
 from anthropic import Anthropic
 
 from .aggregator import AggregatedFlow
 from .sgt import SGTDictionary
-
 
 CATEGORIES = ("business_relevant", "default", "business_irrelevant", "harmful")
 

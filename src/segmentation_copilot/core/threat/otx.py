@@ -16,7 +16,6 @@ import httpx
 
 from .base import ThreatVerdict
 
-
 _BASE_URL = "https://otx.alienvault.com/api/v1"
 
 

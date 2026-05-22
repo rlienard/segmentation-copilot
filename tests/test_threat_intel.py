@@ -24,7 +24,6 @@ from segmentation_copilot.core.threat.cache import MemoryThreatCache
 from segmentation_copilot.core.threat.otx import OTXClient
 from segmentation_copilot.core.threat.virustotal import VirusTotalClient
 
-
 # ---------------------------------------------------------------------------
 # Fake providers
 # ---------------------------------------------------------------------------

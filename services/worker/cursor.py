@@ -14,7 +14,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol
 
-
 CURSOR_TTL_SECONDS = 28 * 24 * 3600
 _KEY = "scopilot:scan:cursor:{tenant_id}"
 

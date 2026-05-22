@@ -8,7 +8,6 @@ env overrides are picked up.
 
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncIterator
 
 import pytest

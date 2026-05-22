@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import (
 from ..config import DatabaseSettings, get_settings
 from .models.orm import Base
 
-
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 

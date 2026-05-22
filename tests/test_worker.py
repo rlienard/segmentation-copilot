@@ -12,7 +12,6 @@ patched Claude classifier:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import patch
 
@@ -29,11 +28,9 @@ from segmentation_copilot.core.repositories.proposals import ProposalRepository
 from segmentation_copilot.core.repositories.sgt import SGTRepository
 from segmentation_copilot.core.services.ingestion import IngestionService
 from segmentation_copilot.core.services.proposal import ProposalService
-
 from services.worker.cursor import MemoryCursorStore
 from services.worker.scan import scan_tenant
-from services.worker.worker import CONSUMER_GROUP_FLOW_UNKNOWN, run_worker
-
+from services.worker.worker import run_worker
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample.log"
 TENANT = "test-tenant"

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from .parser import FlowEvent
-
 
 EPHEMERAL_PORT_THRESHOLD = 1024
 ANY_PORT = "any"

@@ -1,0 +1,21 @@
+# Non-secret configuration shared by every pod.
+#
+# Secret values (DB password, Anthropic key, WebEx token, threat-intel
+# keys) live in a Kubernetes Secret — see secret-example.yaml. Production
+# deployments should source them via External Secrets Operator + Vault,
+# not from the literal secret in this directory.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scopilot-config
+data:
+  SCOPILOT_ENVIRONMENT: "prod"
+  SCOPILOT_LOG_LEVEL: "INFO"
+  SCOPILOT_LOG_FORMAT: "json"
+  SCOPILOT_DEFAULT_TENANT_ID: "default"
+  SCOPILOT_DB__URL: "postgresql+asyncpg://scopilot:scopilot@postgres:5432/scopilot"
+  SCOPILOT_DB__SYNC_URL: "postgresql+psycopg2://scopilot:scopilot@postgres:5432/scopilot"
+  SCOPILOT_REDIS__URL: "redis://redis:6379/0"
+  SCOPILOT_API__REQUIRE_AUTH: "true"
+  SCOPILOT_SCHED__SCAN_INTERVAL_MINUTES: "15"

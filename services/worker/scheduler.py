@@ -21,7 +21,6 @@ from .cursor import CursorStore
 from .leader import LeaderElector
 from .scan import ScanResult, scan_tenant
 
-
 log = logging.getLogger(__name__)
 
 
@@ -67,5 +66,5 @@ async def run_scheduler(
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass

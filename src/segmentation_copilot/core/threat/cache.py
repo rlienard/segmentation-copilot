@@ -15,7 +15,6 @@ don't need Redis.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Protocol
 
@@ -24,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...config import Settings, get_settings
 from ..models.orm import ThreatLookup
 from .base import ThreatVerdict
-
 
 _CLEAN_VERDICT_SENTINEL = "<<clean>>"
 

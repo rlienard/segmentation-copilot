@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ui
+  template:
+    metadata:
+      labels:
+        app: ui
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: ui
+          image: ghcr.io/rlienard/segmentation-copilot:latest
+          command: ["streamlit", "run", "/app/app.py", "--server.address", "0.0.0.0",
+                    "--server.port", "8501", "--server.headless", "true"]
+          env:
+            - name: SCOPILOT_API_BASE
+              value: "http://api"
+          ports:
+            - containerPort: 8501
+              name: http
+          resources:
+            requests: { cpu: "50m", memory: "256Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+spec:
+  selector:
+    app: ui
+  ports:
+    - port: 80
+      targetPort: 8501
+      name: http

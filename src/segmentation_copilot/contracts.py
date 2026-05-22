@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Iterable
-
 from .aggregator import AggregatedFlow
 from .sgt import SGTDictionary
-
 
 PERMIT_CATEGORIES = {"business_relevant", "default"}
 DENY_CATEGORIES = {"business_irrelevant", "harmful"}

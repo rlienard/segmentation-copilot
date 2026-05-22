@@ -25,7 +25,6 @@ from segmentation_copilot.core.repositories import (
 from segmentation_copilot.core.repositories.proposals import ProposalConflictError
 from segmentation_copilot.parser import FlowEvent as ParsedFlowEvent
 
-
 TENANT = "test-tenant"
 
 

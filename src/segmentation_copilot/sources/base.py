@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterator
+from typing import Any
 
 
 @dataclass
@@ -23,5 +24,5 @@ class LogSource(ABC):
 
     @classmethod
     @abstractmethod
-    def from_config(cls, config: LogSourceConfig) -> "LogSource":
+    def from_config(cls, config: LogSourceConfig) -> LogSource:
         ...

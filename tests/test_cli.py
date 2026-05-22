@@ -9,7 +9,6 @@ is covered by `test_api.py`.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,7 +16,6 @@ import httpx
 from typer.testing import CliRunner
 
 from services.cli.main import app
-
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample.log"
 
