@@ -12,7 +12,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-
 STREAM_SCAN_SCHEDULED = "scopilot.events.scan.scheduled.v1"
 STREAM_FLOW_UNKNOWN = "scopilot.events.flow.unknown.v1"
 STREAM_PROPOSAL_CREATED = "scopilot.events.proposal.created.v1"

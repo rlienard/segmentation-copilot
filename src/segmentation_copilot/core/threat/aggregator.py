@@ -21,12 +21,9 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from ...config import Settings, get_settings
 from .base import ThreatIntelClient, ThreatVerdict
 from .cache import ThreatLookupRepository, ThreatVerdictCache, build_cache, is_miss
-
 
 log = logging.getLogger(__name__)
 
@@ -135,7 +132,7 @@ class ThreatAggregator:
             verdict = await asyncio.wait_for(
                 client.lookup_ip(ip), timeout=self._per_call_timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.warning("threat lookup timed out provider=%s ip=%s", client.name, ip)
             return None
         except Exception:

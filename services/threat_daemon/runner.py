@@ -8,8 +8,8 @@ inject an `InMemoryStreamingSource` and a fake aggregator.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Awaitable, Callable
 
 from segmentation_copilot import parser
 from segmentation_copilot.core.events import (
@@ -20,7 +20,6 @@ from segmentation_copilot.core.events import (
 from segmentation_copilot.core.threat import ThreatAggregator
 from segmentation_copilot.sources.streaming import StreamingLogSource
 from segmentation_copilot.sources.streaming_ssh import HEARTBEAT_PREFIX
-
 
 log = logging.getLogger(__name__)
 

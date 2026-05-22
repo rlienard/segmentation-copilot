@@ -1,0 +1,28 @@
+# One-shot Job that runs `alembic upgrade head` before any service starts.
+# Use a Helm pre-install hook / Argo Sync wave in production.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scopilot-migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: alembic
+          image: ghcr.io/rlienard/segmentation-copilot:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: scopilot-config
+            - secretRef:
+                name: scopilot-secrets
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }

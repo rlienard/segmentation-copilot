@@ -18,6 +18,7 @@ from datetime import timedelta
 
 from anthropic import Anthropic
 
+from segmentation_copilot import classify as classify_mod
 from segmentation_copilot.aggregator import AggregatedFlow, FlowKey
 from segmentation_copilot.config import Settings
 from segmentation_copilot.core import db as core_db
@@ -31,10 +32,8 @@ from segmentation_copilot.core.events import (
 from segmentation_copilot.core.models.domain import ACE, ProposalTrigger
 from segmentation_copilot.core.repositories.sgt import SGTRepository
 from segmentation_copilot.core.services.classification import ClassificationService
-from segmentation_copilot.core.services.proposal import ProposalService
 from segmentation_copilot.core.services.notifier import get_notifier
-from segmentation_copilot import classify as classify_mod
-
+from segmentation_copilot.core.services.proposal import ProposalService
 
 CONSUMER_GROUP_FLOW_UNKNOWN = "scopilot.workers.flow_unknown.v1"
 

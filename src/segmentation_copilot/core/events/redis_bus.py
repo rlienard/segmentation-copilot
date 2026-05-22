@@ -15,7 +15,7 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from .bus import EventBus, EventEnvelope
+from .bus import EventEnvelope
 from .streams import EVENT_TTL_SECONDS
 
 

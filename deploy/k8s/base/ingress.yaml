@@ -1,0 +1,60 @@
+# nginx-ingress + cert-manager based ingress. Replace hosts in your
+# overlay; the base only declares the *shape* — no real DNS names.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: scopilot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.example.com
+        - mcp.example.com
+        - ui.example.com
+        - webex.example.com
+      secretName: scopilot-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 80
+    - host: mcp.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-http
+                port:
+                  number: 80
+    - host: ui.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: 80
+    - host: webex.example.com
+      http:
+        paths:
+          - path: /webhooks/webex
+            pathType: Prefix
+            backend:
+              service:
+                name: webex-bot
+                port:
+                  number: 80

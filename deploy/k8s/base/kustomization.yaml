@@ -1,0 +1,30 @@
+# Kustomize base — every deployment, service, configmap, and secret
+# the stack needs. Overlays under `overlays/{dev,staging,prod}` patch
+# replica counts, resource limits, ingress hosts, and secret refs.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: scopilot
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret-example.yaml
+  - postgres.yaml
+  - redis.yaml
+  - migration.yaml
+  - api.yaml
+  - worker.yaml
+  - scheduler.yaml
+  - mcp-http.yaml
+  - webex-bot.yaml
+  - streamlit-ui.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: segmentation-copilot
+
+images:
+  - name: ghcr.io/rlienard/segmentation-copilot
+    newTag: latest

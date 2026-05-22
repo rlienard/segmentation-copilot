@@ -19,7 +19,6 @@ import httpx
 
 from .base import ThreatVerdict
 
-
 _BASE_URL = "https://www.virustotal.com/api/v3"
 
 

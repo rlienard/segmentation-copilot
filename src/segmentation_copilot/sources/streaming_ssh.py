@@ -19,7 +19,6 @@ import logging
 import random
 from collections.abc import AsyncIterator
 
-
 log = logging.getLogger(__name__)
 
 
@@ -95,7 +94,7 @@ class StreamingSSHSource:
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=backoff)
                     return
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 jitter = random.uniform(0, backoff * 0.25)
                 backoff = min(self._backoff_max, backoff * 2 + jitter)
@@ -107,7 +106,7 @@ class StreamingSSHSource:
                 line = await asyncio.wait_for(
                     proc.stdout.readline(), timeout=self._heartbeat_seconds
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 yield f"{HEARTBEAT_PREFIX} {self._host}"
                 continue
             if not line:

@@ -16,8 +16,8 @@ import argparse
 import asyncio
 import logging
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from segmentation_copilot.config import get_settings
 from segmentation_copilot.core import db as core_db

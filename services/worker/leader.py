@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Protocol
+from typing import Protocol
 
 
 class LeaderElector(Protocol):
@@ -99,7 +100,7 @@ class RedisLeader:
                 self._is_leader = False
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self._refresh)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
 

@@ -12,6 +12,7 @@ from ...parser import FlowEvent as ParsedFlowEvent
 from ..models.domain import FlowEventRecord
 from ..models.orm import FlowEvent
 
+
 class FlowEventRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session

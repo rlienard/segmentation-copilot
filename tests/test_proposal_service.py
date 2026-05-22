@@ -29,7 +29,6 @@ from segmentation_copilot.core.services.proposal import (
     idempotency_key,
 )
 
-
 TENANT = "test-tenant"
 
 

@@ -11,8 +11,8 @@ instrumentation without touching the route definitions.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,6 +58,11 @@ def create_app() -> FastAPI:
     app.include_router(matrix.router)
     app.include_router(sgt.router)
     app.include_router(proposals.router)
+
+    # Prometheus /metrics — scraped by the K8s monitoring stack.
+    from segmentation_copilot.core.observability import make_metrics_endpoint  # noqa: PLC0415
+
+    app.add_route("/metrics", make_metrics_endpoint(), methods=["GET"])
     return app
 
 

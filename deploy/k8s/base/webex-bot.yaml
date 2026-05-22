@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webex-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webex-bot
+  template:
+    metadata:
+      labels:
+        app: webex-bot
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: webex
+          image: ghcr.io/rlienard/segmentation-copilot:latest
+          command: ["uvicorn", "services.webex_bot.main:app", "--host", "0.0.0.0", "--port", "8001"]
+          ports:
+            - containerPort: 8001
+              name: http
+          envFrom:
+            - configMapRef:
+                name: scopilot-config
+            - secretRef:
+                name: scopilot-secrets
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webex-bot
+spec:
+  selector:
+    app: webex-bot
+  ports:
+    - port: 80
+      targetPort: 8001
+      name: http

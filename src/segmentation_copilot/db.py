@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Iterator
 
 from .aggregator import AggregatedFlow
 from .parser import FlowEvent
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (

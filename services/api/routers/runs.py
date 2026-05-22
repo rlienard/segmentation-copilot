@@ -15,7 +15,6 @@ from segmentation_copilot.core.repositories.runs import RunRepository
 from segmentation_copilot.core.services import (
     ClassificationService,
     IngestionService,
-    MatrixService,
 )
 
 from ..auth import AuthContext

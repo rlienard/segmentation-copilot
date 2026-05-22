@@ -14,7 +14,6 @@ import pytest
 
 from segmentation_copilot.aggregator import AggregatedFlow
 from segmentation_copilot.core.repositories import (
-    ClassificationRepository,
     MatrixVersionRepository,
     SGTRepository,
 )
@@ -24,7 +23,6 @@ from segmentation_copilot.core.services import (
     IngestionService,
     MatrixService,
 )
-
 
 TENANT = "test-tenant"
 FIXTURE = Path(__file__).parent / "fixtures" / "sample.log"

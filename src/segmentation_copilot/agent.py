@@ -16,7 +16,6 @@ from typing import Any
 
 from . import tools
 
-
 SYSTEM_PROMPT = """\
 You are a **Security Analyst** in charge of defining the TrustSec contracts between
 endpoints connected to a large Cisco SD-Access network. The customer's management

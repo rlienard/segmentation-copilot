@@ -13,6 +13,7 @@ dependencies = [
     "sqlalchemy>=2.0.30",
     "alembic>=1.13.0",
     "aiosqlite>=0.20.0",
+    "prometheus-client>=0.20.0",
 ]
 
 [project.optional-dependencies]
@@ -101,7 +102,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC"]
-ignore = ["E501"]
+# B008: FastAPI's Depends() pattern intentionally uses calls in defaults.
+# UP042: ProposalStatus / FlowCategory inherit str+Enum on purpose for
+#        JSON-compatible enum values; switching to StrEnum is a follow-up.
+ignore = ["E501", "B008", "UP042"]
 
 [tool.mypy]
 python_version = "3.11"

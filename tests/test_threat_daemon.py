@@ -15,7 +15,6 @@ Confirms:
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 from typing import Any
 
@@ -30,7 +29,6 @@ from segmentation_copilot.core.threat.base import ThreatVerdict
 from segmentation_copilot.sources.streaming import InMemoryStreamingSource
 from segmentation_copilot.sources.streaming_ssh import HEARTBEAT_PREFIX
 from services.threat_daemon.runner import run_daemon
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

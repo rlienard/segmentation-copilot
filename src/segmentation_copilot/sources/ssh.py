@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import shlex
+from collections.abc import Iterator
 from datetime import datetime
-from typing import Iterator
 
 from .base import LogSource, LogSourceConfig
 
@@ -42,7 +42,7 @@ class SSHSource(LogSource):
         self.grep_pattern = grep_pattern
 
     @classmethod
-    def from_config(cls, config: LogSourceConfig) -> "SSHSource":
+    def from_config(cls, config: LogSourceConfig) -> SSHSource:
         opts = config.options
         missing = [k for k in ("host", "username", "log_path") if not opts.get(k)]
         if missing:

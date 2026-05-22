@@ -18,7 +18,6 @@ keys and the bus dedupes them — no duplicate proposals.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -29,6 +28,7 @@ from segmentation_copilot.core.events import (
     EventBus,
     FlowUnknownPayload,
 )
+from segmentation_copilot.core.observability import flow_unknown_published_counter
 from segmentation_copilot.core.repositories.events import FlowEventRepository
 from segmentation_copilot.core.services.baseline import BaselineService
 
@@ -125,6 +125,9 @@ async def scan_tenant(
         )
         if event_id is not None:
             enqueued += 1
+            flow_unknown_published_counter.labels(
+                tenant_id=tenant_id, trigger="scheduled"
+            ).inc()
 
     # Advance cursor to the newest event we just observed (NOT `now` —
     # the cursor must track ingestion progress, not wall-clock, so a

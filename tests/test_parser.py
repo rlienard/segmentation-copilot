@@ -2,7 +2,6 @@ from pathlib import Path
 
 from segmentation_copilot.parser import parse_line, parse_lines
 
-
 EXAMPLE = (
     "Jun 18 10:17:22.205: %RBM-6-SGACLHIT: ingress_interface='GigabitEthernet1/0/1' "
     "sgacl_name='testv4' action='Permit' protocol='udp' src-vrf='default' "
